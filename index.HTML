@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Matriz 2×2 — Productividad vs Seguridad (SIGLA)</title>
+
+<!-- Librerías -->
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+  :root{
+    --bg:#ffffff; --fg:#0f172a; --muted:#475569;
+    --card:#ffffff; --border:#e5e7eb; --shadow:0 1px 2px rgba(0,0,0,.06);
+    --accent:#0d6efd; --ghost:#f8fafc; --table-stripe:#fafafa;
+    --good:#2ca02c; --warn:#ff7f0e; --info:#1f77b4; --bad:#d62728; --neutral:#9aa4b2;
+  }
+  [data-theme="dark"]{
+    --bg:#0b1220; --fg:#e6edf3; --muted:#a3b1c6;
+    --card:#0f172a; --border:#1f2a44; --shadow:0 1px 2px rgba(0,0,0,.3);
+    --accent:#4e8cff; --ghost:#132032; --table-stripe:#0c1728;
+  }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:24px;background:var(--bg);color:var(--fg);}
+  h1{margin:0 0 16px;font-size:1.6rem;}
+  .layout{display:grid;grid-template-columns:320px 1fr;gap:16px;}
+  @media (max-width: 960px){ .layout{grid-template-columns:1fr;} }
+  .card{border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;background:var(--card);box-shadow:var(--shadow);}
+  .card h3{margin:0 0 12px;font-size:1.05rem}
+  .muted{color:var(--muted)}
+  label{font-weight:600;font-size:.95rem}
+  input[type="number"],select,button{font:inherit}
+  input[type="number"],select{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--fg);}
+  button{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--accent);color:#fff;cursor:pointer}
+  button.ghost{background:var(--ghost);color:var(--fg)}
+  .btnbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .btnbar.right{justify-content:flex-end}
+  /* KPI */
+  .summary-bar{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px}
+  @media (max-width: 1200px){ .summary-bar{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width: 640px){ .summary-bar{grid-template-columns:1fr;} }
+  .kpi{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card);display:flex;flex-direction:column;gap:4px}
+  .kpi .label{font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .kpi .value{font-size:1.6rem;font-weight:800}
+  .kpi .subv,.kpi .subv2{font-size:.85rem;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
+  .dot.q1{background:var(--good)} .dot.q2{background:var(--warn)} .dot.q3{background:var(--info)} .dot.q4{background:var(--bad)} .dot.tt{background:var(--neutral)}
+  /* Meses chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--border);background:var(--ghost);padding:6px 10px;border-radius:999px;cursor:pointer;user-select:none}
+  .chip.active{outline:2px solid var(--accent)}
+  /* Pesos */
+  .weights-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .weights-grid .cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .weights-grid input{width:110px;text-align:center}
+  /* Umbrales */
+  details{border:1px dashed var(--border);border-radius:10px;padding:10px}
+  details summary{cursor:pointer;font-weight:700}
+  .thr-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  /* Chart + legend */
+  #chart{width:100%;height:560px}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .chip-legend{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:999px;padding:6px 10px;background:var(--card)}
+  .chip-legend .dot{width:12px;height:12px}
+  /* Tabla */
+  .table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;justify-content:space-between}
+  .table-toolbar .left{display:flex;gap:8px;align-items:center}
+  table{border-collapse:collapse;width:100%}
+  th,td{border-bottom:1px solid var(--border);padding:10px;text-align:left}
+  thead th{position:sticky;top:0;background:var(--card);box-shadow:0 1px 0 var(--border);z-index:1;cursor:pointer;user-select:none}
+  thead th .hint{color:var(--muted);font-weight:500;margin-left:6px}
+  tr:hover td{background:var(--table-stripe)}
+  .pill{padding:3px 10px;border-radius:999px;font-size:.8rem;font-weight:600;white-space:nowrap}
+  .pill.a{background:#e8f5e9;color:#166534}
+  .pill.b{background:#fff1e6;color:#9a3412}
+  .pill.c{background:#e6f0ff;color:#1e3a8a}
+  .pill.d{background:#fde8e8;color:#7f1d1d}
+  /* Header actions */
+  .page-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:10px}
+</style>
+</head>
+<body>
+<h1>📊 Matriz 2×2 — Productividad vs Seguridad</h1>
+
+<div class="page-actions">
+  <button id="gsBtn" class="ghost">Cargar desde Google Sheets</button>
+  <button id="runBtn">Generar</button>
+  <button id="resetBtn" class="ghost">Reset</button>
+  <button id="csvBtn" class="ghost">Exportar CSV</button>
+  <button id="themeBtn" class="ghost">🌓 Tema</button>
+</div>
+
+<div class="layout">
+  <!-- ===== Sidebar (filtros) ===== -->
+  <aside class="card" id="filtersCard">
+    <h3>Filtros</h3>
+
+    <section style="margin-top:10px">
+      <h4 style="margin:10px 0 6px">Fuente de datos</h4>
+      <div class="muted">Usando: <b>Google Sheets (GViz / JSONP)</b>. Botón “Cargar desde Google Sheets”.</div>
+    </section>
+
+    <section style="margin-top:16px">
+      <h4 style="margin:0 0 8px">Meses</h4>
+      <div id="chipsMes" class="chips"></div>
+      <div class="btnbar" style="margin-top:8px">
+        <button id="selAll" class="ghost" type="button">Seleccionar todo</button>
+        <button id="clearSel" class="ghost" type="button">Limpiar</button>
+      </div>
+    </section>
+
+    <section style="margin-top:16px">
+      <h4 style="margin:0 0 8px">Pesos Seguridad</h4>
+      <div class="weights-grid">
+        <div class="cell"><span>Geocercas</span><input id="wGeo" type="number" min="0" value="1" step="any" placeholder="1"></div>
+        <div class="cell"><span>Velocidad</span><input id="wVel" type="number" min="0" value="1" step="any" placeholder="1"></div>
+        <div class="cell"><span>Somnolencia</span><input id="wSom" type="number" min="0" value="1" step="any" placeholder="1"></div>
+        <div class="cell"><span>Teléfono</span><input id="wTel" type="number" min="0" value="1" step="any" placeholder="1"></div>
+      </div>
+    </section>
+
+    <section style="margin-top:16px">
+      <h4 style="margin:0 0 8px">Umbrales</h4>
+      <details open>
+        <summary>Productividad y Seguridad</summary>
+        <div class="thr-grid">
+          <div>
+            <label>Productividad</label><br>
+            <select id="prodMode">
+              <option value="median" selected>Mediana</option>
+              <option value="custom">Personalizado</option>
+            </select>
+            <input type="number" id="prodCut" style="display:none;margin-top:6px" placeholder="valor" step="any">
+          </div>
+          <div>
+            <label>Seguridad</label><br>
+            <select id="secMode">
+              <option value="median" selected>Mediana</option>
+              <option value="custom">Personalizado</option>
+            </select>
+            <input type="number" id="secCut" style="display:none;margin-top:6px" placeholder="0–100" step="any">
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <div id="status" class="muted" style="margin-top:14px"></div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main>
+    <!-- KPIs -->
+    <div class="card">
+      <div class="summary-bar" id="summaryBar">
+        <div class="kpi" data-key="TOTAL"><div class="label"><span class="dot tt"></span>Total</div><div class="value">–</div><div class="subv">— %</div><div class="subv2">Prod — | Seg —</div></div>
+        <div class="kpi" data-key="Q1"><div class="label"><span class="dot q1"></span>Q1 · Excelente</div><div class="value">–</div><div class="subv">— %</div><div class="subv2">Prod — | Seg —</div></div>
+        <div class="kpi" data-key="Q2"><div class="label"><span class="dot q2"></span>Q2 · Productivo pero riesgoso</div><div class="value">–</div><div class="subv">— %</div><div class="subv2">Prod — | Seg —</div></div>
+        <div class="kpi" data-key="Q3"><div class="label"><span class="dot q3"></span>Q3 · Seguro pero baja productividad</div><div class="value">–</div><div class="subv">— %</div><div class="subv2">Prod — | Seg —</div></div>
+        <div class="kpi" data-key="Q4"><div class="label"><span class="dot q4"></span>Q4 · Bajo rendimiento y riesgoso</div><div class="value">–</div><div class="subv">— %</div><div class="subv2">Prod — | Seg —</div></div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <h3>Gráfico</h3>
+      <div id="chart"></div>
+      <div class="legend">
+        <span class="chip-legend"><span class="dot q1"></span>Q1 · Excelente</span>
+        <span class="chip-legend"><span class="dot q2"></span>Q2 · Productivo pero riesgoso</span>
+        <span class="chip-legend"><span class="dot q3"></span>Q3 · Seguro pero baja productividad</span>
+        <span class="chip-legend"><span class="dot q4"></span>Q4 · Bajo rendimiento y riesgoso</span>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="table-toolbar">
+        <div class="left"><h3 style="margin:0">Tabla</h3></div>
+        <div class="btnbar right">
+          <button id="csvBtn2" class="ghost">Exportar CSV</button>
+        </div>
+      </div>
+      <div style="max-height:420px;overflow:auto">
+        <table id="resTable" aria-live="polite"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ===== Utilidades ===== */
+const $=s=>document.querySelector(s);
+const MONTHS={'ENERO':1,'FEBRERO':2,'MARZO':3,'ABRIL':4,'MAYO':5,'JUNIO':6,'JULIO':7,'AGOSTO':8,'SEPTIEMBRE':9,'SETIEMBRE':9,'OCTUBRE':10,'NOVIEMBRE':11,'DICIEMBRE':12};
+function parseMonthToken(s){const t=String(s||'').trim();if(!t)return null;const u=t.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();let m;if((m=u.match(/^(\d{4})[-\/](\d{1,2})$/)))return{y:+m[1],m:+m[2],label:t};if((m=u.match(/^(\d{1,2})[-\/](\d{4})$/)))return{y:+m[2],m:+m[1],label:t};if((m=u.match(/^([A-ZÑÁÉÍÓÚ]+)[ -](\d{4})$/))){const mon=MONTHS[m[1]];if(mon)return{y:+m[2],m:mon,label:t};}if((m=u.match(/^(\d{4})[ -]([A-ZÑÁÉÍÓÚ]+)$/))){const mon=MONTHS[m[2]];if(mon)return{y:+m[1],m:mon,label:t};}if(MONTHS[u])return{y:0,m:MONTHS[u],label:t};return{y:0,m:13,label:t};}
+function sortMonths(list){return list.map(parseMonthToken).filter(Boolean).sort((a,b)=>(a.y-b.y)||(a.m-b.m)||String(a.label).localeCompare(String(b.label))).map(o=>o.label);}
+function median(a){const v=a.filter(Number.isFinite).sort((a,b)=>a-b);const m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;}
+function minmax(a){const xs=a.filter(Number.isFinite);if(!xs.length)return a.map(()=>NaN);const lo=Math.min(...xs),hi=Math.max(...xs),d=hi-lo||1;return a.map(v=>Number.isFinite(v)?(v-lo)/d:NaN);}
+function mean(a){const xs=a.filter(Number.isFinite);return xs.length?xs.reduce((x,y)=>x+y)/xs.length:NaN;}
+function fmt(v){return Number.isFinite(v)?(Math.abs(v)>=100?v.toFixed(0):v.toFixed(2)):'—';}
+function pct(n,t){return t?((100*n/t).toFixed(0)+'%'):'— %';}
+function toNum(x){const s=String(x||'').trim();if(!s)return NaN;let t=s.replace(/\s/g,'');if(/,/.test(t)&&!/\.\d+$/.test(t))t=t.replace(/\./g,'').replace(',','.');const v=+t;return isNaN(v)?NaN:v;}
+function keyLike(rows,needle){if(!rows.length)return null;const keys=Object.keys(rows[0]);const U=s=>String(s).toUpperCase();for(const k of keys){if(U(k).includes(U(needle)))return k;}return null;}
+function download(filename, text) { const blob = new Blob([text], {type:'text/csv;charset=utf-8;'}); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; document.body.appendChild(link); link.click(); link.remove(); }
+
+/* ===== Estado ===== */
+let cached=null, lastRows=null, lastCuts=null;
+const Q_LABELS={Q1:'Q1 · Excelente',Q2:'Q2 · Productivo pero riesgoso',Q3:'Q3 · Seguro pero baja productividad',Q4:'Q4 · Bajo rendimiento y riesgoso'};
+let monthsOrdered=[]; let monthsSelected=new Set();
+
+/* ===== Google Sheets (MISMA hoja con 2 pestañas) — GViz JSONP ===== */
+const SHEET_ID = "1daGFLDuEh80eDbDyBEVE1eQjVUW88i1vnYfSNmw4WmA";
+const SHEET_PROD = "Base_Producciones";
+const SHEET_PREC = "Base_Precursores";
+
+// Carga una pestaña por NOMBRE usando JSONP (sin CORS)
+function loadSheetGViz(sheetName){
+  return new Promise((resolve, reject)=>{
+    const cbName = "GVIZ_CB_" + Math.random().toString(36).slice(2);
+    window[cbName] = (resp) => {
+      try{
+        const t = resp.table;
+        const headers = t.cols.map(c => c.label || c.id);
+        const rows = t.rows.map(r => {
+          const o = {};
+          r.c.forEach((cell,i)=>{ o[headers[i]] = cell ? (cell.v ?? "") : ""; });
+          return o;
+        });
+        resolve(rows);
+      }catch(e){ reject(e); }
+      delete window[cbName]; script.remove();
+    };
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq=${encodeURIComponent("select *")}&sheet=${encodeURIComponent(sheetName)}&headers=1&tqx=${encodeURIComponent("responseHandler:"+cbName+";out:json")}`;
+    const script = document.createElement("script");
+    script.src = url;
+    script.onerror = ()=>{ delete window[cbName]; reject(new Error("No se pudo cargar "+sheetName)); };
+    document.body.appendChild(script);
+  });
+}
+
+async function loadFromSheets(){
+  try{
+    status.textContent = "Cargando datos desde Google Sheets (GViz)…";
+    const [dfP, dfS] = await Promise.all([
+      loadSheetGViz(SHEET_PROD),   // Base_Producciones
+      loadSheetGViz(SHEET_PREC)    // Base_Precursores
+    ]);
+    if(!dfP.length || !dfS.length) throw new Error("Hojas vacías o sin permisos.");
+
+    cached = { dfP, dfS };
+    const mP = keyLike(dfP,'MES'), mS = keyLike(dfS,'MES');
+    const months = [...(mP?dfP.map(r=>r[mP]):[]), ...(mS?dfS.map(r=>r[mS]):[])].filter(Boolean);
+    monthsOrdered = sortMonths(Array.from(new Set(months)));
+    renderMonthChips();
+
+    status.textContent = "Datos cargados. Presiona Generar o aplica filtros.";
+  }catch(err){
+    console.error(err);
+    alert("No pude leer Google Sheets. Verifica que el archivo esté 'Cualquiera con el enlace - Lector' y que las hojas se llamen exactamente 'Base_Producciones' y 'Base_Precursores'.\n\nDetalle: "+err.message);
+    status.textContent = "Error al cargar desde Sheets.";
+  }
+}
+
+/* ===== Eventos UI ===== */
+document.getElementById('gsBtn').addEventListener('click', loadFromSheets);
+document.getElementById('runBtn').addEventListener('click', ()=>generate());
+document.getElementById('csvBtn').addEventListener('click', ()=>exportCSV());
+document.getElementById('csvBtn2').addEventListener('click', ()=>exportCSV());
+resetBtn.addEventListener('click', ()=>{
+  monthsSelected.clear(); document.querySelectorAll('#chipsMes .chip').forEach(c=>c.classList.remove('active'));
+  wGeo.value=1; wVel.value=1; wSom.value=1; wTel.value=1;
+  prodMode.value='median'; secMode.value='median'; prodCut.value=''; secCut.value=''; prodCut.style.display='none'; secCut.style.display='none';
+  if(cached) generate();
+});
+themeBtn.addEventListener('click', ()=>{
+  const root=document.documentElement;
+  const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+  root.setAttribute('data-theme', next);
+  if(lastRows&&lastCuts) plotChart(lastRows,lastCuts);
+});
+function renderMonthChips(){
+  const wrap=$('#chipsMes'); wrap.innerHTML='';
+  monthsOrdered.forEach(m=>{
+    const span=document.createElement('span');
+    span.className='chip'; span.textContent=m;
+    span.onclick=()=>{ if(monthsSelected.has(m)) monthsSelected.delete(m); else monthsSelected.add(m); span.classList.toggle('active'); };
+    wrap.appendChild(span);
+  });
+}
+selAll.onclick=()=>{ monthsSelected=new Set(monthsOrdered); document.querySelectorAll('#chipsMes .chip').forEach(c=>c.classList.add('active')); };
+clearSel.onclick=()=>{ monthsSelected.clear(); document.querySelectorAll('#chipsMes .chip').forEach(c=>c.classList.remove('active')); };
+prodMode.onchange=e=>prodCut.style.display=e.target.value==='custom'?'block':'none';
+secMode.onchange=e=>secCut.style.display=e.target.value==='custom'?'block':'none';
+
+/* ===== Core pipeline ===== */
+async function generate(){
+  if(!cached){ alert('Primero usa “Cargar desde Google Sheets”.'); return; }
+  let {dfP,dfS}=cached;
+
+  // Filtro por mes
+  const selected=[...monthsSelected];
+  const mP=keyLike(dfP,'MES'), mS=keyLike(dfS,'MES');
+  if(selected.length){ if(mP) dfP=dfP.filter(r=>selected.includes(String(r[mP]))); if(mS) dfS=dfS.filter(r=>selected.includes(String(r[mS]))); }
+
+  // Columnas
+  const sigP=keyLike(dfP,'SIGLA')||(dfP.length?Object.keys(dfP[0])[1]:null);
+  const sigS=keyLike(dfS,'SIGLA')||(dfS.length?Object.keys(dfS[0])[1]:null);
+  const gCol=keyLike(dfP,'GUIAS')||keyLike(dfP,'GUÍAS');     // N° GUIAS
+  const dCol=keyLike(dfP,'DIAS');                            // DIAS TRABAJADOS
+  const tCol=keyLike(dfS,'TIPO')||keyLike(dfS,'TIPOS');      // TIPOS
+  const eCol=keyLike(dfS,'EVENT')||keyLike(dfS,'# EVENTOS'); // # EVENTOS
+  if(!sigP||!gCol||!dCol){ status.textContent='Faltan columnas en Base_Producciones.'; return; }
+  if(!sigS||!tCol||!eCol){ status.textContent='Faltan columnas en Base_Precursores.'; return; }
+
+  // Pesos
+  const weights={Geo:+wGeo.value||0, Vel:+wVel.value||0, Som:+wSom.value||0, Tel:+wTel.value||0};
+
+  // Productividad = Σ GUIAS / máx DIAS por SIGLA
+  const agg={};
+  dfP.forEach(r=>{
+    const s=String(r[sigP]||'').trim(); if(!s) return;
+    const g=toNum(r[gCol]); const d=toNum(r[dCol]);
+    if(!agg[s]) agg[s]={g:0,d:0};
+    if(Number.isFinite(g)) agg[s].g+=g;
+    if(Number.isFinite(d)) agg[s].d=Math.max(agg[s].d,d);
+  });
+  const prod={}; Object.entries(agg).forEach(([s,v])=>{ if(v.d>0) prod[s]=v.g/v.d; });
+
+  // Seguridad (4 categorías via TIPOS y # EVENTOS)
+  const cats=['Geocercas','Velocidad en Ruta','Somnolencia','Teléfono'];
+  const sumEv={};
+  dfS.forEach(r=>{
+    const s=String(r[sigS]||'').trim(); if(!s) return;
+    const tipo=String(r[tCol]||'').toUpperCase();
+    const ev=toNum(r[eCol]); if(!Number.isFinite(ev)) return;
+    if(!sumEv[s]) sumEv[s]={'Geocercas':0,'Velocidad en Ruta':0,'Somnolencia':0,'Teléfono':0};
+    if(/GEO/.test(tipo)) sumEv[s]['Geocercas']+=ev;
+    else if(/VEL/.test(tipo)) sumEv[s]['Velocidad en Ruta']+=ev;
+    else if(/SOM/.test(tipo)) sumEv[s]['Somnolencia']+=ev;
+    else if(/TEL/.test(tipo)) sumEv[s]['Teléfono']+=ev;
+  });
+  const sigs=Object.keys(sumEv);
+  const norm={}; cats.forEach(c=>{ const arr=sigs.map(s=>sumEv[s][c]); norm[c]=minmax(arr); });
+  const seg={}; sigs.forEach((s,i)=>{ let num=0,den=0; cats.forEach(c=>{ const w=(c==='Geocercas')?weights.Geo:(c==='Velocidad en Ruta')?weights.Vel:(c==='Somnolencia')?weights.Som:weights.Tel; const risk=norm[c][i]; if(w>0&&Number.isFinite(risk)){ num+=(1-risk)*w; den+=w; } }); seg[s]=den>0?(num/den)*100:NaN; });
+
+  // Unir + cortes + bucket
+  const rows=[]; const all=new Set([...Object.keys(prod),...Object.keys(seg)]);
+  all.forEach(s=>{ const P=prod[s], S=seg[s]; if(Number.isFinite(P)&&Number.isFinite(S)) rows.push({sigla:s,prod:P,seg:S}); });
+  if(!rows.length){ status.textContent='No hay datos válidos con el filtro seleccionado.'; try{Plotly.purge('chart');}catch{}; resTable.tHead.innerHTML=''; resTable.tBodies[0].innerHTML=''; renderKPIs(null); return; }
+
+  const cutP=(prodMode.value==='custom')?+prodCut.value:median(rows.map(r=>r.prod));
+  const cutS=(secMode.value==='custom')?+secCut.value:median(rows.map(r=>r.seg));
+  rows.forEach(r=>{
+    const hp=r.prod>=cutP, hs=r.seg>=cutS;
+    if(hp&&hs){ r.bucket='Q1'; r.pill='a'; r.full=Q_LABELS.Q1; }
+    else if(hp&&!hs){ r.bucket='Q2'; r.pill='b'; r.full=Q_LABELS.Q2; }
+    else if(!hp&&hs){ r.bucket='Q3'; r.pill='c'; r.full=Q_LABELS.Q3; }
+    else { r.bucket='Q4'; r.pill='d'; r.full=Q_LABELS.Q4; }
+  });
+
+  lastRows=rows; lastCuts={cutP,cutS};
+  plotChart(rows,{cutP,cutS});
+  renderTable(rows);
+  renderKPIs(rows);
+  status.textContent=`SIGLAs: ${rows.length}. Cortes → Prod: ${fmt(cutP)} | Seg: ${fmt(cutS)}.`;
+}
+
+/* ===== Export CSV ===== */
+function exportCSV(){
+  if(!lastRows || !lastRows.length){ alert('No hay datos para exportar.'); return; }
+  const rows=[...document.querySelectorAll('#resTable tbody tr')].map(tr=>{
+    const tds=tr.querySelectorAll('td');
+    return {sigla:tds[0].innerText, prod:tds[1].innerText, seg:tds[2].innerText, cuadrante:tds[3].innerText};
+  });
+  const header='Sigla,Productividad,Seguridad,Cuadrante\n';
+  const body=rows.map(r=>[r.sigla,r.prod,r.seg,r.cuadrante].join(',')).join('\n');
+  download('matriz_prod_seg.csv', header+body);
+}
+
+/* ===== Gráfico ===== */
+function plotChart(rows,{cutP,cutS}) {
+  const color = { Q1:getComputedStyle(document.documentElement).getPropertyValue('--good').trim(),
+                  Q2:getComputedStyle(document.documentElement).getPropertyValue('--warn').trim(),
+                  Q3:getComputedStyle(document.documentElement).getPropertyValue('--info').trim(),
+                  Q4:getComputedStyle(document.documentElement).getPropertyValue('--bad').trim() };
+  const byQ = { Q1:[],Q2:[],Q3:[],Q4:[] }; rows.forEach(r=>byQ[r.bucket].push(r));
+  const mk = q => ({ name:q, type:'scatter', mode:'markers',
+    x:byQ[q].map(d=>d.prod), y:byQ[q].map(d=>d.seg),
+    text:byQ[q].map(d=>`${d.sigla} — ${d.full}`),
+    hovertemplate:'<b>%{text}</b><br>Prod: %{x:.2f}<br>Seg: %{y:.2f}<extra></extra>',
+    marker:{ size:9, color:color[q], line:{width:1,color:'rgba(0,0,0,.25)'} }, showlegend:false
+  });
+  const xs=rows.map(r=>r.prod), ys=rows.map(r=>r.seg);
+  const layout={ title:'Matriz Productividad vs Seguridad',
+    xaxis:{title:'Productividad (Σ Nº Guías / Máx. Días)'},
+    yaxis:{title:'Seguridad (0–100)'},
+    shapes:[
+      {type:'line',x0:cutP,x1:cutP,y0:Math.min(...ys),y1:Math.max(...ys),line:{dash:'dash',color:'#999'}},
+      {type:'line',x0:Math.min(...xs),x1:Math.max(...xs),y0:cutS,y1:cutS,line:{dash:'dash',color:'#999'}}
+    ],
+    margin:{l:60,r:20,t:50,b:50},
+    paper_bgcolor:getComputedStyle(document.body).getPropertyValue('--card'),
+    plot_bgcolor:getComputedStyle(document.body).getPropertyValue('--card'),
+    font:{color:getComputedStyle(document.body).getPropertyValue('--fg')},
+    hovermode:'closest', hoverdistance:8, uirevision:'keep'
+  };
+  Plotly.newPlot('chart', ['Q1','Q2','Q3','Q4'].map(mk), layout, {displaylogo:false,responsive:true});
+}
+
+/* ===== KPIs ===== */
+function renderKPIs(rows){
+  const cards=document.querySelectorAll('.kpi');
+  if(!rows||!rows.length){
+    cards.forEach(c=>{ c.querySelector('.value').textContent='–'; c.querySelector('.subv').textContent='— %'; c.querySelector('.subv2').textContent='Prod — | Seg —'; });
+    return;
+  }
+  const total=rows.length;
+  const groups={TOTAL:rows,Q1:rows.filter(r=>r.bucket==='Q1'),Q2:rows.filter(r=>r.bucket==='Q2'),Q3:rows.filter(r=>r.bucket==='Q3'),Q4:rows.filter(r=>r.bucket==='Q4')};
+  cards.forEach(card=>{
+    const key=card.getAttribute('data-key'); const list=groups[key]||[]; const n=list.length;
+    card.querySelector('.value').textContent=String(n);
+    card.querySelector('.subv').textContent = key==='TOTAL' ? '100%' : pct(n,total);
+    const avgP=mean(list.map(r=>r.prod)); const avgS=mean(list.map(r=>r.seg));
+    card.querySelector('.subv2').textContent = `Prod ${fmt(avgP)} | Seg ${fmt(avgS)}`;
+  });
+}
+
+/* ===== Tabla ordenable ===== */
+let tableRowsCache=[]; let currentSort={key:'sigla',dir:'asc'};
+function renderTable(rows){
+  tableRowsCache=[...rows];
+  const thead=resTable.tHead || resTable.createTHead();
+  const tbody=resTable.tBodies[0] || resTable.createTBody();
+  thead.innerHTML = `
+    <tr>
+      <th data-key="sigla">Sigla <span class="hint">↕</span></th>
+      <th data-key="prod">Productividad <span class="hint">↕</span></th>
+      <th data-key="seg">Seguridad <span class="hint">↕</span></th>
+      <th data-key="bucket">Cuadrante <span class="hint">↕</span></th>
+    </tr>`;
+  [...thead.querySelectorAll('th')].forEach(th=>{
+    th.tabIndex=0;
+    th.addEventListener('click', ()=>sortTable(th.dataset.key));
+    th.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); sortTable(th.dataset.key);} });
+  });
+  paintTable();
+}
+function sortTable(key){
+  if(currentSort.key===key){ currentSort.dir=(currentSort.dir==='asc'?'desc':'asc'); }
+  else{ currentSort={key,dir:'asc'}; }
+  paintTable();
+}
+function paintTable(){
+  const tbody=resTable.tBodies[0];
+  const rows=[...tableRowsCache];
+  const {key,dir}=currentSort; const mult=dir==='asc'?1:-1;
+  rows.sort((a,b)=>{
+    if(key==='prod'||key==='seg') return (a[key]-b[key])*mult;
+    return String(a[key]).localeCompare(String(b[key]),'es',{numeric:true})*mult;
+  });
+  [...resTable.tHead.querySelectorAll('th')].forEach(th=>{
+    const k=th.dataset.key; th.querySelector('.hint').textContent=(k===key?(dir==='asc'?'▲':'▼'):'↕');
+  });
+  tbody.innerHTML = rows.map(r=>
+    `<tr>
+      <td>${r.sigla}</td>
+      <td>${fmt(r.prod)}</td>
+      <td>${fmt(r.seg)}</td>
+      <td><span class="pill ${r.pill}">${r.full}</span></td>
+    </tr>`).join('');
+}
+</script>
+</body>
+</html>
